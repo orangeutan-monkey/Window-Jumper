@@ -1,0 +1,53 @@
+﻿<Window 
+    
+    x:Class="Window_Jumper.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        mc:Ignorable="d"
+        Title="Float Browser" Height="600" Width="800"
+        WindowStartupLocation="CenterScreen"
+        Background="Transparent"
+        AllowsTransparency="True"
+        BorderThickness="1"
+        BorderBrush="#FF444444">
+    
+    <!-- The content is generated programmatically in MainWindow.xaml.cs -->
+    <!-- This is just a placeholder to ensure the XAML is valid -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="30"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        
+        <Grid Grid.Row="0" Background="#FF333333">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            
+            <TextBox Grid.Column="0" Margin="5,2,0,2" 
+                     Background="#FF444444" Foreground="White"
+                     BorderThickness="1" BorderBrush="#FF555555"/>
+            
+            <Button Grid.Column="1" Content="Go" Width="50" Margin="5,2,0,2"
+                    Background="#FF444444" Foreground="White"
+                    BorderThickness="1" BorderBrush="#FF555555"/>
+            
+            <Button Grid.Column="2" Content="⚙" Width="30" Margin="5,2,0,2"
+                    Background="#FF444444" Foreground="White"
+                    BorderThickness="1" BorderBrush="#FF555555"/>
+            
+            <Button Grid.Column="3" Content="✕" Width="30" Margin="5,2,5,2"
+                    Background="#FF444444" Foreground="White"
+                    BorderThickness="1" BorderBrush="#FF555555"/>
+        </Grid>
+        
+        <!-- WebView2 will be added programmatically -->
+        <Border Grid.Row="1" Background="#FFF0F0F0"/>
+    </Grid>
+</Window>

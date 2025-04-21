@@ -1,0 +1,458 @@
+using System;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using Microsoft.Web.WebView2.Wpf;
+using Microsoft.Web.WebView2.Core;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
+using Microsoft.Win32;
+using System.ComponentModel;
+
+namespace Window_Jumper
+{
+    public partial class MainWindow : Window
+    {
+        private WebView2 webView;
+        private TextBox addressBar;
+        private Button go;
+        private Button settingsB;
+        private Button hide;
+        private const int TOGGLE_HOTKEY_ID = 9000;
+        private AppSettings settings;
+        private bool isDragging = false;
+        private Point dragStartPoint;
+        private System.Windows.Forms.NotifyIcon notifyIcon;
+        // private bool _contentLoaded = false;
+
+        [DllImport("kernel32.dll")]
+        static extern IntPtr GetCurrentProcess();
+        [DllImport("kernel32.dll")]
+        static extern bool SetPriorityClass(IntPtr hProcess, uint dwPriorityClass);
+        private const uint REALTIME_PRIORITY_CLASS = 0x00000100;
+        private const uint HIGH_PRIORITY_CLASS = 0x00000080;
+        [DllImport("user32.dll")]
+        private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+        [DllImport("user32.dll")]
+        private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+        private const uint MOD_ALT = 0x0001;
+        private const uint MOD_CONTROL = 0x0002;
+        private const uint MOD_SHIFT = 0x0004;
+
+        public MainWindow()
+        {
+            InitializeComponent();
+            settings = AppSettings.Load();
+            this.Topmost = settings.AlwaysOnTop;
+            this.WindowStyle = WindowStyle.None;
+            this.ResizeMode = ResizeMode.NoResize;
+            this.Width = settings.WindowWidth;
+            this.Height = settings.WindowHeight;
+            this.Background = new SolidColorBrush(Color.FromRgb(51, 51, 51)); // Match address bar color
+
+            // Set focus transitions to ensure proper focus handling
+            System.Windows.Input.Keyboard.AddGotKeyboardFocusHandler(this, (s, e) => {
+                if (e.NewFocus is WebView2)
+                {
+                    // WebView got focus, ensure any mouse capture is released
+                    if (this.IsMouseCaptured)
+                        this.ReleaseMouseCapture();
+                }
+            });
+
+            InitializeBrowser();
+            InitializeSystemTrayIcon();
+            DisguiseProcess();
+            this.Loaded += MainWindow_Loaded;
+            this.Closing += MainWindow_Closing;
+            this.MouseLeftButtonDown += MainWindow_MouseLeftButtonDown;
+            this.MouseLeftButtonUp += MainWindow_MouseLeftButtonUp;
+            this.MouseMove += MainWindow_MouseMove;
+            if (settings.AutoStart)
+            {
+                SetStartupRegistryEntry(true);
+            }
+        }
+
+        private void InitializeBrowser()
+        {
+            Content = null;
+            Grid mainGrid = new Grid();
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(30) });
+            mainGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            this.Content = mainGrid;
+            Grid addressPanel = new Grid();
+            addressPanel.Background = new SolidColorBrush(Color.FromRgb(51, 51, 51));
+            addressPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            addressPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
+            addressPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            addressPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            addressBar = new TextBox
+            {
+                Margin = new Thickness(5, 2, 0, 2),
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Background = new SolidColorBrush(Color.FromRgb(68, 68, 68)),
+                Foreground = Brushes.White,
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(85, 85, 85))
+            };
+            addressBar.KeyDown += AddressBar_KeyDown;
+            Grid.SetColumn(addressBar, 0);
+            addressPanel.Children.Add(addressBar);
+            go = new Button
+            {
+                Content = "Go",
+                Margin = new Thickness(5, 2, 0, 2),
+                Width = 50,
+                Background = new SolidColorBrush(Color.FromRgb(68, 68, 68)),
+                Foreground = Brushes.White,
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(85, 85, 85))
+            };
+            go.Click += GoButton_Click;
+            Grid.SetColumn(go, 1);
+            addressPanel.Children.Add(go);
+            settingsB = new Button
+            {
+                Content = "⚙",
+                Margin = new Thickness(5, 2, 0, 2),
+                Width = 30,
+                Background = new SolidColorBrush(Color.FromRgb(68, 68, 68)),
+                Foreground = Brushes.White,
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(85, 85, 85))
+            };
+            settingsB.Click += SettingsButton_Click;
+            Grid.SetColumn(settingsB, 2);
+            addressPanel.Children.Add(settingsB);
+            hide = new Button
+            {
+                Content = "✕",
+                Margin = new Thickness(5, 2, 5, 2),
+                Width = 30,
+                Background = new SolidColorBrush(Color.FromRgb(68, 68, 68)),
+                Foreground = Brushes.White,
+                BorderThickness = new Thickness(1),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(85, 85, 85))
+            };
+            hide.Click += (s, e) => ToggleWindowVisibility();
+            Grid.SetColumn(hide, 3);
+            addressPanel.Children.Add(hide);
+            Grid.SetRow(addressPanel, 0);
+            mainGrid.Children.Add(addressPanel);
+
+            // Create a border to host the WebView2 - this helps with focus issues
+            Border webViewBorder = new Border();
+            Grid.SetRow(webViewBorder, 1);
+            mainGrid.Children.Add(webViewBorder);
+
+            // Create and configure the WebView2
+            webView = new WebView2();
+            webView.Focusable = true; // Make sure it can receive focus
+
+            // WebView2 click handler to ensure focus
+            webView.PreviewMouseDown += (s, e) => {
+                webView.Focus();
+                e.Handled = false; // Allow event to continue to WebView
+            };
+
+            webViewBorder.Child = webView;
+            webView.CoreWebView2InitializationCompleted += WebView_CoreWebView2InitializationCompleted;
+            InitializeAsync();
+        }
+
+        private void SetStartupRegistryEntry(bool enable)
+        {
+            try
+            {
+                RegistryKey rk = Registry.CurrentUser.OpenSubKey
+                    ("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", true);
+
+                if (enable)
+                {
+                    string appPath = Process.GetCurrentProcess().MainModule.FileName;
+                    rk.SetValue("WindowJumper", appPath);
+                }
+                else
+                {
+                    rk.DeleteValue("WindowJumper", false);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to set startup registry: {ex.Message}");
+            }
+        }
+
+        private void AddressBar_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                NavigateToAddress();
+            }
+        }
+
+        private void GoButton_Click(object sender, RoutedEventArgs e)
+        {
+            NavigateToAddress();
+        }
+
+        private void NavigateToAddress()
+        {
+            string url = addressBar.Text.Trim();
+            if (!url.StartsWith("http://") && !url.StartsWith("https://"))
+            {
+                url = "https://" + url;
+            }
+
+            webView.CoreWebView2.Navigate(url);
+        }
+
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            OpenSettingsDialog();
+        }
+
+        private void OpenSettingsDialog()
+        {
+            var settingsDialog = new SettingsDialog(settings);
+            settingsDialog.Owner = this;
+
+            bool? result = settingsDialog.ShowDialog();
+            if (result == true)
+            {
+                this.Topmost = settings.AlwaysOnTop;
+                this.Width = settings.WindowWidth;
+                this.Height = settings.WindowHeight;
+                SetStartupRegistryEntry(settings.AutoStart);
+                UnregisterHotKey(new WindowInteropHelper(this).Handle, TOGGLE_HOTKEY_ID);
+                RegisterToggleHotkey();
+            }
+        }
+
+        private async void InitializeAsync()
+        {
+            try
+            {
+                await webView.EnsureCoreWebView2Async(null);
+                webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+                webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                webView.CoreWebView2.Navigate(settings.Homepage);
+                webView.CoreWebView2.ContextMenuRequested += CoreWebView2_ContextMenuRequested;
+                webView.CoreWebView2.NavigationCompleted += CoreWebView2_NavigationCompleted;
+                webView.CoreWebView2.NavigationStarting += CoreWebView2_NavigationStarting;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"WebView2 initialization failed: {ex.Message}. Please ensure Microsoft Edge WebView2 Runtime is installed.",
+                    "Initialization Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void CoreWebView2_NavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
+        {
+            addressBar.Text = e.Uri;
+        }
+
+        private void CoreWebView2_NavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            addressBar.Text = webView.CoreWebView2.Source;
+        }
+
+        private void CoreWebView2_ContextMenuRequested(object sender, CoreWebView2ContextMenuRequestedEventArgs e)
+        {
+            var menuItems = e.MenuItems;
+
+            CoreWebView2ContextMenuItem settingsItem = webView.CoreWebView2.Environment.CreateContextMenuItem(
+                "Window Jumper Settings", null, CoreWebView2ContextMenuItemKind.Command);
+            settingsItem.CustomItemSelected += (s, args) => OpenSettingsDialog();
+            menuItems.Insert(0, settingsItem);
+            menuItems.Insert(1, webView.CoreWebView2.Environment.CreateContextMenuItem(
+                "", null, CoreWebView2ContextMenuItemKind.Separator));
+        }
+
+        private void WebView_CoreWebView2InitializationCompleted(object sender, CoreWebView2InitializationCompletedEventArgs e)
+        {
+            if (e.IsSuccess)
+            {
+                webView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
+                webView.CoreWebView2.ProcessFailed += CoreWebView2_ProcessFailed;
+            }
+        }
+
+        private void CoreWebView2_ProcessFailed(object sender, CoreWebView2ProcessFailedEventArgs e)
+        {
+            if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited)
+            {
+                this.Dispatcher.InvokeAsync(() =>
+                {
+                    InitializeBrowser();
+                });
+            }
+        }
+
+        private void CoreWebView2_NewWindowRequested(object sender, CoreWebView2NewWindowRequestedEventArgs e)
+        {
+            e.Handled = true;
+            webView.CoreWebView2.Navigate(e.Uri);
+        }
+
+        private void InitializeSystemTrayIcon()
+        {
+            notifyIcon = new System.Windows.Forms.NotifyIcon
+            {
+                Icon = System.Drawing.SystemIcons.Application,
+                Visible = true,
+                Text = "Window Jumper"
+            };
+            System.Windows.Forms.ContextMenuStrip contextMenu = new System.Windows.Forms.ContextMenuStrip();
+
+            System.Windows.Forms.ToolStripMenuItem exitMenuItem = new System.Windows.Forms.ToolStripMenuItem("Exit");
+            exitMenuItem.Click += (s, e) => Application.Current.Shutdown();
+
+            System.Windows.Forms.ToolStripMenuItem toggleMenuItem = new System.Windows.Forms.ToolStripMenuItem("Toggle Window");
+            toggleMenuItem.Click += (s, e) => ToggleWindowVisibility();
+
+            System.Windows.Forms.ToolStripMenuItem settingsMenuItem = new System.Windows.Forms.ToolStripMenuItem("Settings");
+            settingsMenuItem.Click += (s, e) => OpenSettingsDialog();
+            contextMenu.Items.Add(toggleMenuItem);
+            contextMenu.Items.Add(settingsMenuItem);
+            contextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+            contextMenu.Items.Add(exitMenuItem);
+            notifyIcon.ContextMenuStrip = contextMenu;
+            notifyIcon.DoubleClick += (s, e) => ToggleWindowVisibility();
+        }
+
+        private void DisguiseProcess()
+        {
+            try
+            {
+                SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+            }
+            catch
+            {
+                // Silently fail
+            }
+        }
+
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            RegisterToggleHotkey();
+
+            HwndSource source = HwndSource.FromHwnd(new WindowInteropHelper(this).Handle);
+            source.AddHook(HwndHook);
+
+            if (settings.HideOnStart)
+            {
+                this.Hide();
+            }
+        }
+
+        private void RegisterToggleHotkey()
+        {
+            var windowHandle = new WindowInteropHelper(this).Handle;
+            RegisterHotKey(windowHandle, TOGGLE_HOTKEY_ID, (uint)settings.HideModKeys, settings.HideKey);
+        }
+
+        private void MainWindow_Closing(object sender, CancelEventArgs e)
+        {
+            e.Cancel = true;
+            this.Hide();
+        }
+
+        private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            const int WM_HOTKEY = 0x0312;
+
+            if (msg == WM_HOTKEY && wParam.ToInt32() == TOGGLE_HOTKEY_ID)
+            {
+                ToggleWindowVisibility();
+                handled = true;
+            }
+
+            return IntPtr.Zero;
+        }
+
+        private void ToggleWindowVisibility()
+        {
+            if (this.IsVisible)
+            {
+                this.Hide();
+            }
+            else
+            {
+                this.Show();
+                this.Activate();
+                this.Topmost = settings.AlwaysOnTop;
+            }
+        }
+
+        private void MainWindow_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            // Check if the click is on the title bar area
+            if (e.GetPosition(this).Y < 30)
+            {
+                // Get the element that was actually clicked
+                DependencyObject originalSource = e.OriginalSource as DependencyObject;
+
+                // Only initiate dragging if we're not clicking on the WebView2
+                if (!IsPartOfWebView(originalSource))
+                {
+                    isDragging = true;
+                    dragStartPoint = e.GetPosition(this);
+                    this.CaptureMouse();
+                    e.Handled = true; // Mark as handled
+                }
+            }
+        }
+
+        // Helper method to check if an element is part of the WebView2
+        private bool IsPartOfWebView(DependencyObject element)
+        {
+            if (element == null) return false;
+
+            // Check if the element is the WebView2
+            if (element == webView) return true;
+
+            // Check if any parent is the WebView2
+            DependencyObject current = element;
+            while (current != null)
+            {
+                if (current == webView) return true;
+
+                try
+                {
+                    // Get the visual parent
+                    current = VisualTreeHelper.GetParent(current);
+                }
+                catch
+                {
+                    // If an exception occurs (e.g., with certain non-visual elements), break the loop
+                    break;
+                }
+            }
+
+            return false;
+        }
+
+        private void MainWindow_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            isDragging = false;
+            this.ReleaseMouseCapture();
+        }
+
+        private void MainWindow_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (isDragging)
+            {
+                Point currentPosition = e.GetPosition(this);
+                Vector offset = currentPosition - dragStartPoint;
+
+                this.Left += offset.X;
+                this.Top += offset.Y;
+            }
+        }
+    }
+}

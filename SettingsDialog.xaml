@@ -1,0 +1,92 @@
+<Window x:Class="Window_Jumper.SettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Float Browser Settings" Height="350" Width="450" 
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="MinWidth" Value="80"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="3"/>
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Margin" Value="5,10,5,5"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="Label">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+    
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        
+        <!-- Homepage -->
+        <Label Grid.Row="0" Grid.Column="0" Content="Homepage:"/>
+        <TextBox x:Name="txtHomepage" Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="2" Text="https://www.google.com"/>
+        
+        <!-- Window Size -->
+        <Label Grid.Row="1" Grid.Column="0" Content="Window Size:"/>
+        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Margin="5">
+            <TextBox x:Name="txtWidth" Width="60" Text="800"/>
+            <TextBlock Text=" x " VerticalAlignment="Center" Margin="5,0"/>
+            <TextBox x:Name="txtHeight" Width="60" Text="600"/>
+            <TextBlock Text=" pixels" VerticalAlignment="Center" Margin="5,0"/>
+        </StackPanel>
+        
+        <!-- Hotkey -->
+        <Label Grid.Row="2" Grid.Column="0" Content="Toggle Hotkey:"/>
+        <TextBox x:Name="txtHotkey" Grid.Row="2" Grid.Column="1" IsReadOnly="True" Background="#FFF0F0F0"/>
+        <Button x:Name="btnChangeHotkey" Grid.Row="2" Grid.Column="2" Content="Change" 
+                Padding="10,2" Click="BtnChangeHotkey_Click"/>
+        
+        <!-- Checkboxes -->
+        <CheckBox x:Name="chkAutoStart" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3" 
+                  Content="Start Float Browser when Windows starts"/>
+        
+        <CheckBox x:Name="chkAlwaysOnTop" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" 
+                  Content="Always keep browser window on top"/>
+        
+        <CheckBox x:Name="chkHideOnStart" Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="3" 
+                  Content="Hide browser window on startup"/>
+        
+        <!-- About Information -->
+        <GroupBox Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="3" Header="About" Margin="0,10,0,0">
+            <StackPanel Margin="5">
+                <TextBlock Text="Float Browser" FontWeight="Bold"/>
+                <TextBlock Text="Version 1.0.0" Margin="0,2,0,0"/>
+                <TextBlock Text="A lightweight hidden web browser for Windows" Margin="0,2,0,0"/>
+                <TextBlock TextWrapping="Wrap" Margin="0,5,0,0">
+                    <Run Text="This application is for educational purposes only. Use responsibly and at your own risk."/>
+                </TextBlock>
+            </StackPanel>
+        </GroupBox>
+        
+        <!-- Buttons -->
+        <StackPanel Grid.Row="8" Grid.Column="0" Grid.ColumnSpan="3" 
+                    Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="btnSave" Content="Save" Click="BtnSave_Click"/>
+            <Button x:Name="btnCancel" Content="Cancel" Click="BtnCancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
