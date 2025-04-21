@@ -74,15 +74,6 @@ Settings include:
 
 4. Find the built installer at `bin\Release\WindowJumper.msi`
 
-## Project Structure
-
-- **App.xaml/App.xaml.cs**: Application entry point
-- **MainWindow.xaml.cs**: Main browser window implementation
-- **SettingsDialog.xaml.cs**: Settings configuration dialog
-- **AppSettings.cs**: Settings management
-- **GlobalKeyboardHook.cs**: Global keyboard shortcut handler
-- **Installer/WindowJumper.wxs**: WiX installer configuration
-
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
