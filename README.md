@@ -80,6 +80,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Disclaimer
 
-This application is for educational purposes only. Some exam proctoring software may consider this type of application to be against their terms of service. Use responsibly and at your own risk.
+This application is for educational purposes only.
 
 Developed and Copyrighted by Anirudh Deveram 
